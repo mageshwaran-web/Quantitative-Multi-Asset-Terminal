@@ -19,3 +19,9 @@ uvicorn[standard]>=0.29.0
 pydantic>=2.6.0
 
 # sqlite3, json, sqlite storage, itertools and argparse are stdlib.
+
+# --- portfolio optimization (Tab 5) ---
+scipy>=1.11.0
+
+# --- AI research assistant (Tab 6, optional) ---
+requests>=2.31.0

@@ -37,6 +37,8 @@ import streamlit as st
 
 import backtester as bt
 import indicators as ind
+import portfolio as pf
+import ai_assistant as ai
 
 DB_PATH = os.path.join("data", "market.db")
 ASSETS = ["GOLD", "BITCOIN", "NVIDIA"]
@@ -291,8 +293,9 @@ with st.sidebar:
         unsafe_allow_html=True,
     )
 
-tab1, tab2, tab3, tab4 = st.tabs(
-    ["  Asset Explorer  ", "  Correlation  ", "  Backtest  ", "  Robustness & Regimes  "]
+tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs(
+    ["  Asset Explorer  ", "  Correlation  ", "  Backtest  ",
+     "  Robustness & Regimes  ", "  Portfolio  ", "  AI Assistant  "]
 )
 
 # ======================================================================
@@ -511,10 +514,9 @@ with tab3:
         st.warning(f"No rows stored for {bt_asset}.")
     else:
         lo, hi = bt_full["date"].min().date(), bt_full["date"].max().date()
-        rng = pcols[2].date_input("Backtest window", value=(lo, hi), min_value=lo,
-                                  max_value=hi, key="bt_dates")
-        b_start, b_end = rng if isinstance(rng, tuple) and len(rng) == 2 else (lo, hi)
-        run = pcols[3].button("Run Backtest", key="bt_run", type="primary")
+        b_start = pcols[2].date_input("From", value=lo, min_value=lo, max_value=hi, key="bt_start")
+        b_end = pcols[3].date_input("To", value=hi, min_value=lo, max_value=hi, key="bt_end")
+        run = st.button("Run Backtest", type="primary", key="bt_run")
         bt_df = slice_dates(bt_full, b_start, b_end)
 
         if run:
@@ -765,3 +767,208 @@ with tab4:
                 "any single regime.</div>", unsafe_allow_html=True)
         elif reg is not None:
             st.warning("No regime produced a result.")
+
+# ======================================================================
+# Tab 5 — Portfolio Optimization
+# ======================================================================
+with tab5:
+    st.markdown(
+        '<div class="note">Modern Portfolio Theory on historical returns. The '
+        "weights below are optimal <b>for the past sample shown</b> — correlations "
+        "and volatilities drift over time, so this is backward-looking analysis, "
+        "not an investment recommendation for the future.</div>",
+        unsafe_allow_html=True,
+    )
+
+    p_frames = {a: load_prices(a) for a in ASSETS}
+    p_frames = {a: d for a, d in p_frames.items() if not d.empty}
+
+    if len(p_frames) < 2:
+        st.warning("At least two assets with stored data are needed to optimize.")
+    else:
+        pc1, pc2, pc3 = st.columns(3)
+        chosen_assets = pc1.multiselect("Assets", list(p_frames), default=list(p_frames),
+                                        key="pf_assets")
+        p_years = pc2.slider("Lookback (years)", 1, 12, 5, key="pf_years")
+        rf = pc3.number_input("Risk-free rate (annual %)", 0.0, 15.0, 0.0, step=0.25,
+                              key="pf_rf") / 100.0
+        allow_short = st.checkbox("Allow short positions (negative weights)",
+                                  value=False, key="pf_short")
+
+        if len(chosen_assets) < 2:
+            st.warning("Select at least two assets.")
+        else:
+            cutoff = pd.Timestamp.today().normalize() - pd.DateOffset(years=p_years)
+            windowed = {
+                a: p_frames[a].loc[p_frames[a]["date"] >= cutoff].reset_index(drop=True)
+                for a in chosen_assets
+            }
+
+            if st.button("Run optimization", key="pf_run", type="primary"):
+                st.session_state["pf_result"] = pf.optimize_portfolio(
+                    windowed, risk_free_rate=rf, allow_short=allow_short)
+
+            result = st.session_state.get("pf_result")
+            if result is None:
+                st.markdown(
+                    '<div class="note">Choose assets and press <b>Run optimization</b>.'
+                    "</div>", unsafe_allow_html=True)
+            elif result.get("warning"):
+                st.warning(result["warning"])
+            else:
+                st.caption(
+                    f"{result['n_observations']} shared trading days · "
+                    f"{result['start_date']} to {result['end_date']}"
+                )
+
+                ms, mv, ew = result["max_sharpe"], result["min_volatility"], result["equal_weight"]
+                cards([
+                    ("Max Sharpe — return", fmt(ms["return"] * 100, "%"), "acc",
+                     f"Sharpe {ms['sharpe']:.2f}"),
+                    ("Max Sharpe — volatility", fmt(ms["volatility"] * 100, "%"), "neu",
+                     "annualised"),
+                    ("Min volatility — return", fmt(mv["return"] * 100, "%"), "neu",
+                     f"vol {mv['volatility']*100:.2f}%"),
+                    ("Equal weight (1/N) — Sharpe", fmt(ew["sharpe"]), tone_of(ew["sharpe"]),
+                     "naive benchmark"),
+                ])
+
+                w1, w2 = st.columns(2)
+                wfig = go.Figure()
+                assets_list = result["assets"]
+                for label, port, colour in [
+                    ("Max Sharpe", ms, CYAN), ("Min Volatility", mv, VIOLET),
+                    ("Equal Weight", ew, MUTED),
+                ]:
+                    wfig.add_trace(go.Bar(
+                        x=assets_list,
+                        y=[port["weights"][a] * 100 for a in assets_list],
+                        name=label))
+                wfig.update_layout(barmode="group", yaxis_title="Weight (%)")
+                w1.plotly_chart(style_fig(wfig, "Portfolio weights by method", 380),
+                                use_container_width=True, config=PLOT_CFG)
+
+                frontier = result["efficient_frontier"]
+                if not frontier.empty:
+                    ffig = go.Figure()
+                    ffig.add_trace(go.Scatter(
+                        x=frontier["volatility"] * 100, y=frontier["return"] * 100,
+                        mode="lines", name="Efficient frontier",
+                        line=dict(color=CYAN, width=2)))
+                    ffig.add_trace(go.Scatter(
+                        x=[ms["volatility"] * 100], y=[ms["return"] * 100],
+                        mode="markers", name="Max Sharpe",
+                        marker=dict(color=GREEN, size=12, symbol="star")))
+                    ffig.add_trace(go.Scatter(
+                        x=[mv["volatility"] * 100], y=[mv["return"] * 100],
+                        mode="markers", name="Min Volatility",
+                        marker=dict(color=VIOLET, size=11, symbol="diamond")))
+                    ffig.add_trace(go.Scatter(
+                        x=[ew["volatility"] * 100], y=[ew["return"] * 100],
+                        mode="markers", name="Equal Weight",
+                        marker=dict(color=MUTED, size=10, symbol="circle")))
+                    ffig.update_layout(xaxis_title="Volatility (%)",
+                                       yaxis_title="Expected return (%)")
+                    w2.plotly_chart(style_fig(ffig, "Efficient frontier", 380),
+                                    use_container_width=True, config=PLOT_CFG)
+
+                st.markdown("### Weights detail")
+                detail = pd.DataFrame({
+                    "Asset": assets_list,
+                    "Max Sharpe %": [round(ms["weights"][a] * 100, 1) for a in assets_list],
+                    "Min Volatility %": [round(mv["weights"][a] * 100, 1) for a in assets_list],
+                    "Equal Weight %": [round(ew["weights"][a] * 100, 1) for a in assets_list],
+                })
+                st.dataframe(detail, hide_index=True, use_container_width=True)
+
+                st.markdown("### Correlation used in this optimization")
+                corr = result["correlation_matrix"]
+                cfig = go.Figure(go.Heatmap(
+                    z=corr.to_numpy(), x=list(corr.columns), y=list(corr.index),
+                    zmin=-1, zmax=1, colorscale=[[0, RED], [0.5, "#161B26"], [1, CYAN]],
+                    text=corr.round(2).to_numpy(), texttemplate="%{text}",
+                    textfont=dict(size=13, color=TEXT),
+                    colorbar=dict(outlinewidth=0, thickness=10,
+                                  tickfont=dict(color=MUTED, size=10))))
+                st.plotly_chart(style_fig(cfig, "Return correlation (same sample)", 360),
+                                use_container_width=True, config=PLOT_CFG)
+
+# ======================================================================
+# Tab 6 — AI Research Assistant
+# ======================================================================
+with tab6:
+    st.markdown(
+        '<div class="note">This assistant explains numbers the platform has already '
+        "computed. It never predicts prices, never generates trading signals, and "
+        "never recommends an allocation — it only narrates results already on screen. "
+        "Powered by Featherless.</div>",
+        unsafe_allow_html=True,
+    )
+
+    if not ai.is_configured():
+        st.warning(
+            "No Featherless API key found. Set the `FEATHERLESS_API_KEY` environment "
+            "variable, then restart the app to use this tab.\n\n"
+            "Windows (PowerShell): `$env:FEATHERLESS_API_KEY=\"your-key-here\"`\n\n"
+            "Then re-run `streamlit run dashboard.py` from the same terminal."
+        )
+    else:
+        st.success("Featherless API key detected.")
+
+        context_choice = st.selectbox(
+            "What should the assistant look at?",
+            ["Last backtest result (Tab 3)", "Last robustness sweep (Tab 4)",
+             "Last regime analysis (Tab 4)", "Last portfolio optimization (Tab 5)"],
+            key="ai_context",
+        )
+
+        default_q = ""
+        bt_result = st.session_state.get("bt_result")
+        rb_table = st.session_state.get("rb_table")
+        rb_reg = st.session_state.get("rb_reg_out")
+        pf_result = st.session_state.get("pf_result")
+
+        available = {
+            "Last backtest result (Tab 3)": bt_result is not None and not bt_result.get("warning"),
+            "Last robustness sweep (Tab 4)": rb_table is not None and not rb_table.empty,
+            "Last regime analysis (Tab 4)": rb_reg is not None and not rb_reg.empty,
+            "Last portfolio optimization (Tab 5)": pf_result is not None and not pf_result.get("warning"),
+        }
+
+        if not available[context_choice]:
+            st.info(
+                f"No result to explain yet for '{context_choice}'. Run it in its tab "
+                "first, then come back here."
+            )
+        else:
+            question = st.text_area(
+                "Ask a question (optional — leave blank for a general summary)",
+                value=default_q, key="ai_question", height=90,
+                placeholder="e.g. Why did the strategy underperform buy-and-hold?",
+            )
+            if st.button("Ask the assistant", key="ai_ask", type="primary"):
+                with st.spinner("Thinking..."):
+                    q = question.strip() or None
+                    if context_choice == "Last backtest result (Tab 3)":
+                        r_asset, r_strat, r_params = st.session_state.get(
+                            "bt_meta", ("", "", {}))
+                        answer = ai.explain_backtest(bt_result, r_asset, r_strat,
+                                                     r_params, q)
+                    elif context_choice == "Last robustness sweep (Tab 4)":
+                        answer = ai.explain_robustness(
+                            rb_table.to_dict(orient="records"),
+                            st.session_state.get("rb_strategy", ""),
+                            st.session_state.get("rb_asset", ""), q)
+                    elif context_choice == "Last regime analysis (Tab 4)":
+                        answer = ai.explain_regimes(
+                            rb_reg.to_dict(orient="records"),
+                            st.session_state.get("rb_strategy", ""),
+                            st.session_state.get("rb_asset", ""), q)
+                    else:
+                        answer = ai.explain_portfolio(pf_result, q)
+                    st.session_state["ai_answer"] = answer
+
+            answer = st.session_state.get("ai_answer")
+            if answer:
+                st.markdown("### Response")
+                st.markdown(f'<div class="note">{answer}</div>', unsafe_allow_html=True)
