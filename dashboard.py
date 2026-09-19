@@ -44,18 +44,29 @@ DB_PATH = os.path.join("data", "market.db")
 ASSETS = ["GOLD", "BITCOIN", "NVIDIA"]
 PERIODS_PER_YEAR = {"BITCOIN": 365, "GOLD": 252, "NVIDIA": 252}
 
-# palette
-BG = "#0B0E14"
-PANEL = "rgba(255,255,255,0.035)"
-GRID = "rgba(255,255,255,0.06)"
-TEXT = "#E6EAF2"
-MUTED = "#8A93A6"
-CYAN = "#22D3EE"
-BLUE = "#5B8DEF"
-VIOLET = "#A78BFA"
-GREEN = "#34D399"
-RED = "#F87171"
-AMBER = "#FBBF24"
+# --- Palette ---------------------------------------------------------
+# Professional pattern confirmed across TradingView / QuantConnect / dark
+# admin dashboards: layered near-black grays for depth (not one flat panel
+# color), a SINGLE accent used only for the primary action and active
+# state, and data itself (not UI chrome) carrying green/red meaning.
+BG        = "#0A0C10"   # page background — near-black
+PANEL     = "#12151C"   # level-1 surface: sidebar, base cards
+PANEL2    = "#181C25"   # level-2 surface: nested/hover cards, inputs
+BORDER    = "#242833"   # low-contrast hairline border
+TEXT      = "#E9EBF0"   # primary text
+MUTED     = "#8B93A5"   # secondary text, labels, captions
+
+ACCENT    = "#3B82F6"   # single UI accent — primary buttons, active tab, focus
+ACCENT_HOVER = "#5B93F5"
+
+# Chart-only colors (data series, not UI chrome) — kept distinct from ACCENT
+CYAN      = "#22D3EE"
+BLUE      = ACCENT
+VIOLET    = "#A78BFA"
+GREEN     = "#34D399"   # gains only
+RED       = "#F87171"   # losses only
+AMBER     = "#FBBF24"
+GRID      = "rgba(255,255,255,0.06)"   # chart gridlines
 
 st.set_page_config(
     page_title="Quant Terminal", page_icon="◧", layout="wide",
@@ -72,71 +83,125 @@ html, body, [class*="css"] {{ font-family:'Inter',system-ui,sans-serif; }}
 .block-container {{ padding:2.2rem 2.6rem 4rem; max-width:1500px; }}
 #MainMenu, footer {{ visibility:hidden; }}
 
-h1,h2,h3,h4 {{ color:{TEXT}; letter-spacing:-0.02em; font-weight:600; }}
-h1 {{ font-size:1.9rem !important; margin-bottom:.2rem !important; }}
-h3 {{ font-size:1.05rem !important; margin:1.6rem 0 .5rem !important; }}
+h1,h2,h3,h4 {{ color:{TEXT}; letter-spacing:-0.015em; font-weight:600; }}
+h1 {{ font-size:1.85rem !important; margin-bottom:.2rem !important; }}
+h3 {{ font-size:1.02rem !important; margin:1.6rem 0 .5rem !important; }}
 p, label, .stMarkdown {{ color:{MUTED}; }}
 
+/* ---- Masthead: level-1 surface, quiet border, no gradient wash ---- */
 .hero {{
-  border:1px solid rgba(255,255,255,.08); border-radius:18px; padding:1.5rem 1.8rem;
-  background:linear-gradient(135deg, rgba(34,211,238,.07), rgba(91,141,239,.03) 55%, transparent);
-  backdrop-filter:blur(14px); margin-bottom:.4rem;
+  border:1px solid {BORDER}; border-radius:12px; padding:1.5rem 1.8rem;
+  background:{PANEL}; margin-bottom:.5rem;
 }}
 .hero .eyebrow {{
-  font-family:'JetBrains Mono',monospace; font-size:.68rem; letter-spacing:.22em;
-  text-transform:uppercase; color:{CYAN}; margin-bottom:.45rem;
+  font-family:'JetBrains Mono',monospace; font-size:.66rem; letter-spacing:.2em;
+  text-transform:uppercase; color:{ACCENT}; margin-bottom:.45rem;
 }}
 .hero .sub {{ color:{MUTED}; font-size:.87rem; line-height:1.55; max-width:78ch; margin:0; }}
 
-.cardrow {{ display:flex; gap:14px; flex-wrap:wrap; margin:.5rem 0 .3rem; }}
+/* ---- Metric cards: level-2 surface sits above level-1 page, giving depth
+   without relying on shadows or blur ---- */
+.cardrow {{ display:flex; gap:12px; flex-wrap:wrap; margin:.5rem 0 .3rem; }}
 .card {{
-  flex:1 1 170px; min-width:160px; padding:16px 18px; border-radius:16px;
-  border:1px solid rgba(255,255,255,.08); background:{PANEL};
-  backdrop-filter:blur(12px); box-shadow:0 8px 26px rgba(0,0,0,.34);
+  flex:1 1 170px; min-width:160px; padding:16px 18px; border-radius:10px;
+  border:1px solid {BORDER}; background:{PANEL2};
 }}
 .card .k {{
-  font-family:'JetBrains Mono',monospace; font-size:.63rem; letter-spacing:.15em;
+  font-family:'JetBrains Mono',monospace; font-size:.62rem; letter-spacing:.13em;
   text-transform:uppercase; color:{MUTED}; margin-bottom:.5rem; white-space:nowrap;
   overflow:hidden; text-overflow:ellipsis;
 }}
-.card .v {{ font-size:1.5rem; font-weight:600; line-height:1.15; letter-spacing:-.02em; }}
+.card .v {{ font-size:1.45rem; font-weight:600; line-height:1.15; letter-spacing:-.02em; }}
 .card .n {{ font-size:.72rem; color:{MUTED}; margin-top:.35rem; }}
-.pos {{ color:{GREEN}; }} .neg {{ color:{RED}; }} .acc {{ color:{CYAN}; }} .neu {{ color:{TEXT}; }}
+.pos {{ color:{GREEN}; }} .neg {{ color:{RED}; }} .acc {{ color:{ACCENT}; }} .neu {{ color:{TEXT}; }}
 
-.stTabs [data-baseweb="tab-list"] {{ gap:6px; border-bottom:1px solid rgba(255,255,255,.07); }}
+/* ---- Tabs: single accent for the active state only ---- */
+.stTabs [data-baseweb="tab-list"] {{ gap:4px; border-bottom:1px solid {BORDER}; }}
 .stTabs [data-baseweb="tab"] {{
-  height:44px; padding:0 20px; background:transparent; border-radius:10px 10px 0 0;
-  color:{MUTED}; font-size:.87rem; font-weight:500;
+  height:42px; padding:0 18px; background:transparent; border-radius:8px 8px 0 0;
+  color:{MUTED}; font-size:.86rem; font-weight:500;
 }}
-.stTabs [aria-selected="true"] {{ background:rgba(34,211,238,.09); color:{CYAN} !important; }}
+.stTabs [aria-selected="true"] {{
+  background:{PANEL2}; color:{TEXT} !important;
+  box-shadow: inset 0 -2px 0 {ACCENT};
+}}
 
+/* ---- Inputs: level-2 surface, quiet border, accent only on focus ---- */
 .stSelectbox div[data-baseweb="select"] > div, .stMultiSelect div[data-baseweb="select"] > div,
 .stNumberInput input, .stDateInput input {{
-  background:rgba(255,255,255,.04) !important; border:1px solid rgba(255,255,255,.1) !important;
-  border-radius:8px !important; color:{TEXT} !important;
+  background:{PANEL2} !important; border:1px solid {BORDER} !important;
+  border-radius:6px !important; color:{TEXT} !important;
 }}
+.stSelectbox div[data-baseweb="select"]:focus-within > div,
+.stDateInput input:focus {{ border-color:{ACCENT} !important; }}
 .stDateInput {{ width: 100%; }}
 .stDateInput div[data-testid="dateInputContainer"] {{ display: flex; flex-direction: column; gap: 8px; }}
 [data-testid="stDateInput"] input {{ cursor: pointer; }}
-.stSlider [data-baseweb="slider"] div[role="slider"] {{ background:{CYAN} !important; }}
+/* Only the thumb (the one BaseWeb slider element that is stable across
+   Streamlit versions) gets recolored. Earlier attempts also targeted the
+   track-fill and min/max tick labels by structural position (nth-child),
+   which does not reliably match Streamlit's actual DOM and instead painted
+   a solid accent box behind the "2" / "100" range-limit numbers. Simplest
+   fix: leave the track and tick labels at Streamlit's own default styling. */
+.stSlider [data-baseweb="slider"] div[role="slider"] {{
+  background:{ACCENT} !important; border-color:{ACCENT} !important;
+}}
 
+/* ---- Buttons: explicit two-tier hierarchy ----
+   PRIMARY (type="primary") = the one action that matters on this screen:
+     solid accent fill, dark text, unmistakable.
+   SECONDARY (default) = everything else: outlined, quiet, doesn't compete. */
 .stButton>button {{
-  width:100%; border-radius:8px; padding:10px 16px; font-weight:600; font-size:.9rem;
-  border: 1px solid {CYAN}; color:{BG};
-  background-color: {CYAN}; transition: all .15s ease;
+  width:100%; border-radius:6px; padding:9px 16px; font-weight:600; font-size:.88rem;
+  transition: all .15s ease;
 }}
-.stButton>button:hover {{ 
-  background-color: {BLUE};
-  border-color: {BLUE};
-  box-shadow: 0 4px 12px rgba(34,211,238,.3);
+.stButton>button[kind="primary"],
+.stButton>button[data-testid="stBaseButton-primary"] {{
+  background-color:{ACCENT} !important; border:1px solid {ACCENT} !important;
 }}
-.stButton>button:active {{ opacity: 0.95; }}
+.stButton>button[kind="primary"] *,
+.stButton>button[data-testid="stBaseButton-primary"] * {{
+  color:#FFFFFF !important;
+}}
+.stButton>button[kind="primary"]:hover,
+.stButton>button[data-testid="stBaseButton-primary"]:hover {{
+  background-color:{ACCENT_HOVER} !important; border-color:{ACCENT_HOVER} !important;
+  box-shadow: 0 2px 10px rgba(59,130,246,.28);
+}}
+.stButton>button[kind="primary"]:disabled,
+.stButton>button[data-testid="stBaseButton-primary"]:disabled {{
+  background-color:{ACCENT} !important; border-color:{ACCENT} !important; opacity: 0.55 !important;
+  cursor: not-allowed;
+}}
+.stButton>button[kind="primary"]:disabled *,
+.stButton>button[data-testid="stBaseButton-primary"]:disabled * {{
+  color:rgba(255,255,255,.75) !important;
+}}
+.stButton>button[kind="secondary"],
+.stButton>button[data-testid="stBaseButton-secondary"] {{
+  background-color:transparent !important; border:1px solid {BORDER} !important;
+}}
+.stButton>button[kind="secondary"] *,
+.stButton>button[data-testid="stBaseButton-secondary"] * {{
+  color:{TEXT} !important;
+}}
+.stButton>button[kind="secondary"]:hover,
+.stButton>button[data-testid="stBaseButton-secondary"]:hover {{
+  border-color:{ACCENT} !important;
+}}
+.stButton>button[kind="secondary"]:hover *,
+.stButton>button[data-testid="stBaseButton-secondary"]:hover * {{
+  color:{ACCENT} !important;
+}}
+.stButton>button:active {{ opacity: 0.92; }}
 
-.stDataFrame {{ border:1px solid rgba(255,255,255,.08); border-radius:14px; overflow:hidden; }}
-[data-testid="stSidebar"] {{ background:#080A10; border-right:1px solid rgba(255,255,255,.06); }}
-hr {{ border-color:rgba(255,255,255,.07); }}
+.stCheckbox label p {{ color:{MUTED} !important; font-size:.85rem; }}
+
+.stDataFrame {{ border:1px solid {BORDER}; border-radius:10px; overflow:hidden; }}
+[data-testid="stSidebar"] {{ background:{PANEL}; border-right:1px solid {BORDER}; }}
+hr {{ border-color:{BORDER}; }}
 .note {{
-  font-size:.78rem; color:{MUTED}; border-left:2px solid rgba(34,211,238,.45);
+  font-size:.78rem; color:{MUTED}; border-left:2px solid {ACCENT};
   padding:.45rem 0 .45rem .8rem; margin:.7rem 0 .2rem; line-height:1.6;
 }}
 </style>
@@ -913,8 +978,6 @@ with tab6:
             "Then re-run `streamlit run dashboard.py` from the same terminal."
         )
     else:
-        st.success("Featherless API key detected.")
-
         context_choice = st.selectbox(
             "What should the assistant look at?",
             ["Last backtest result (Tab 3)", "Last robustness sweep (Tab 4)",
