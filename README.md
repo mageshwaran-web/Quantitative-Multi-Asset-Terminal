@@ -131,4 +131,4 @@ stay on screen while you change other controls and only recompute when you press
 the button again — the earlier version discarded results on every rerun, which
 is what made the buttons feel unresponsive.
 
-See `FEATURES.md` for the full problem-statement-to-code checklist.
+
